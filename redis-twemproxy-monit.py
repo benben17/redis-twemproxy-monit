@@ -5,7 +5,6 @@ import re
 import time,datetime
 import paramiko
 
-__author__ = 'lixiaozhu'
 #配置相关命令
 #nutcracker文件位置
 nutcracker_file="/etc/nutcracker.yml"
@@ -106,7 +105,7 @@ def redis_master():
 print datetime.datetime.now(),"INFO Start to monit redis status !"
 print "The redis master ip is",redis_master()["redis_master_ip"]
 while(True):
-    time.sleep(check_time)  
+    time.sleep(check_time)    ##程序休息10秒
     #获取信息
     file_info=None
     try:
@@ -126,6 +125,6 @@ while(True):
         redis_server.exec_command(redis_nutcracker_start)
         print datetime.datetime.now(),"INFO restart nutcracker over!"
         print "The redis master ip is",redis_master()["redis_master_ip"]
-    #程序休息10秒
+    
 
     
