@@ -12,5 +12,9 @@ The basic idea behind it, is so that you have redundancy in your redis shards, w
 Slave1  SlaveN      Slave 1 Slave N
 
             Redis Sentinel
-A more detailed explanation can be found on an article on my site.
 
+脚本运行：
+nohup redis-twemproxy-monit.py &
+
+配置文件路径
+TwemProxy  /etc/nutcracker.yml
