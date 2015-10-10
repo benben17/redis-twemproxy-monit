@@ -5,6 +5,7 @@ import re
 import time,datetime
 import paramiko
 
+__author__ = 'lixiaozhu'
 #配置相关命令
 #nutcracker文件位置
 nutcracker_file="/etc/nutcracker.yml"
@@ -24,14 +25,14 @@ check_time=10
 
 #配置相关服务器信息
 host={}
-host["ip"]="10.237.81.xxx"
-host["name"]="****"
+host["ip"]="10.xx.xx.xx"
+host["name"]="********"
 host["password"]="********"
 host["port"]=22
 #检查各个进程的存活情况
-redis_check="lsof -i:7000"
-redis_sentinel_cehck="lsof -i:26379"
-redis_nutcracker_check="lsof -i:22121"
+redis_check="netstat -antp|awk  '/7000/ &&  /LISTEN/'"
+redis_sentinel_cehck="netstat -antp|awk  '/7000/ &&  /LISTEN/'"
+redis_nutcracker_check="netstat -antp|awk  '/7000/ &&  /LISTEN/'"
 #redis相关信
 print "==="*30
 
@@ -105,8 +106,9 @@ def redis_master():
 print datetime.datetime.now(),"INFO Start to monit redis status !"
 print "The redis master ip is",redis_master()["redis_master_ip"]
 while(True):
-    time.sleep(check_time)    ##程序休息10秒
-    #获取信息
+    time.sleep(check_time)              #程序休息10秒
+    check_redis_sentinel(redis_server)  #检查redis_sentinel 以及TwemProxy 
+
     file_info=None
     try:
         file_info=check_nutcracker(redis_server,redis_master())
@@ -125,6 +127,5 @@ while(True):
         redis_server.exec_command(redis_nutcracker_start)
         print datetime.datetime.now(),"INFO restart nutcracker over!"
         print "The redis master ip is",redis_master()["redis_master_ip"]
-    
 
     
