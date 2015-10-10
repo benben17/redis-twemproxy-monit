@@ -25,9 +25,9 @@ check_time=10
 
 #配置相关服务器信息
 host={}
-host["ip"]="10.237.81.103"
-host["name"]="root"
-host["password"]="ledoadmin"
+host["ip"]="10.237.81.xxx"
+host["name"]="****"
+host["password"]="********"
 host["port"]=22
 #检查各个进程的存活情况
 redis_check="lsof -i:7000"
