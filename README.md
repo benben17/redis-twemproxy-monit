@@ -20,12 +20,13 @@ nohup redis-twemproxy-monit.py &
 TwemProxy  /etc/nutcracker/nutcracker.yml
 
 1、本机redis_Sentinel监控 ,注释以下几行
+host={}
 host["ip"] = "10.10.10.1"
 host["name"] = "******"
 host["password"] = "******"
 host["port"] = 22
 2、监控远程redis_Sentinel
-配置对应的服务器信息 即可
+配置对应的服务器信息即可
 
 脚本运行：
 nohup redis-twemproxy-monit.py &

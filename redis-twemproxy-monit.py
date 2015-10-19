@@ -27,6 +27,7 @@ _redis_server = None
 redis_sentinel_cehck = "netstat -antp|awk  '/26379/ &&  /LISTEN/'"
 redis_nutcracker_check = "netstat -antp|awk  '/22121/ &&  /LISTEN/'"
 
+host=None
 host = {}
 host["ip"] = "10.10.10.1"
 host["name"] = "******"
