@@ -1,141 +1,206 @@
 # -*- coding: utf-8 -*-
-#coding=utf-8
-import sys
-import re
-import time,datetime
-import paramiko
+# coding=utf-8
+__author__ = 'lixiaozhu'
+
+import time
+import re,os
+import datetime, paramiko
+# nutcracker文件位置
+_nutcracker_file = "/etc/nutcracker/nutcracker.yml"
+# _nutcracker_file = "alpha.xml"
+# 启动sentinel
+_redis_sentinel_start = "nohup redis-sentinel /export/sentinel/sentinel.conf &"
+# 关闭sentinel
+_redis_sentinel_end = "kill -s 9 `ps -aux | grep redis-sentinel | awk '{print $2}'`"
+# 启动nutcracker
+_redis_nutcracker_start = "nutcracker -d -p /var/log/nutcracker.pid -c " + _nutcracker_file
+# 关闭nutcracker
+_redis_nutcracker_end = "cat /var/log/nutcracker.pid |xargs kill -9 && rm -rf /var/log/nutcracker.pid"
+# 查看当前主从信息
+_redis_sentinel_info = "redis-cli -p 26379 info Sentinel|grep status"
+_redis_name_command="redis-cli -p 26379 info Sentinel |awk -F\",\" \'/address/ {print $1}\'|awk -F\"\:name=\" '{printf(\"\%s,\",$2)}'"
+
+# 检查配置时间，单位秒
+check_time = 5
+_redis_server = None
+# 检查各个进程的存活情况
+redis_sentinel_cehck = "netstat -antp|awk  '/26379/ &&  /LISTEN/'"
+redis_nutcracker_check = "netstat -antp|awk  '/22121/ &&  /LISTEN/'"
+
+host = {}
+host["ip"] = "10.10.10.1"
+host["name"] = "******"
+host["password"] = "******"
+host["port"] = 22
 
 
-#nutcracker文件位置
-nutcracker_file="/etc/nutcracker.yml"
-#启动sentinel
-redis_sentinel_start="nohup redis-sentinel /root/redis-3.0.3/sentinel.conf &"
-#关闭sentinel
-redis_sentinel_end="kill -s 9 `ps -aux | grep redis-sentinel | awk '{print $2}'`"
-#启动nutcracker
-redis_nutcracker_start="nutcracker -d -p  /var/log/nutcracker.pid -c "+nutcracker_file
-#关闭nutcracker
-redis_nutcracker_end="cat /var/log/nutcracker.pid |xargs kill -9 && rm -rf /var/log/nutcracker.pid"
-#查看当前主从信息
-redis_sentinel_info="redis-cli -p 26379 info Sentinel|grep status"
-
-#检查配置时间，单位秒
-check_time=10
-
-#配置相关服务器信息
-host={}
-host["ip"]="10.237.81.xxx"
-host["name"]="****
-host["password"]="*******"
-host["port"]=22
-#检查各个进程的存活情况
-redis_check="netstat -antp|awk  '/7000/ &&  /LISTEN/'"
-redis_sentinel_cehck="netstat -antp|awk  '/26379/ &&  /LISTEN/'"
-redis_nutcracker_check="netstat -antp|awk  '/22121/ &&  /LISTEN/'"
-#redis相关信
-print "==="*30
-
-def log(loglevel,loginfo):
-    time_info=datetime.datetime.now()
-    print time_info,loglevel,loginfo
-
-def ssh_pwd(hostname,username,password,port=22):
-    paramiko.util.log_to_file('pwd.log')
-    ssh=paramiko.SSHClient()
+def ssh_pkey_pwd(hostname, username, password, privatekey=None, port=22):
+    paramiko.util.log_to_file('pkey.log')
+    ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(hostname,port,username,password)
+    ssh.connect(hostname, port, username, password, key_filename=privatekey)
     return ssh
-redis_server=ssh_pwd(host["ip"],host["name"],host["password"],host["port"])
 
-def check_redis_sentinel(redis_server):
-    redis_sentinel_status=redis_server.exec_command(redis_sentinel_cehck)[1].read()
+
+if host is None or {}:
+    _redis_server = None
+else:
+    _redis_server = ssh_pkey_pwd(host["ip"], host["name"], host["password"], port=host["port"])
+
+def run_command(check_command):
+    if _redis_server is None:
+        command_result = os.popen(check_command).read()
+    else:
+        command_result = _redis_server.exec_command(check_command)[1].read()
+    return command_result
+
+def get_reids_names():
+    _redis_master_names=re.split(",", run_command(_redis_name_command))
+    key=len(_redis_master_names)-1
+    del _redis_master_names[key]
+    return tuple(_redis_master_names)
+_redis_master_name=get_reids_names()
+
+
+def check_redis_sentinel():
+    redis_sentinel_status = run_command(redis_sentinel_cehck)
     if redis_sentinel_status is "":
-        log("ERROR", "redis_sentinel is not running,start redis_sentinel")
-        redis_server.exec_command(redis_sentinel_start)
+        log("[ERROR]", "redis_sentinel is not running,start redis_sentinel")
+        redis_sentinel_status = run_command(_redis_sentinel_start)
         if redis_sentinel_status is not "":
-           log("INFO", "redis_sentinel Start success!")
-    # else:
-    #    print datetime.datetime.now(),"INFO redis_sentinel_cehck status is OK!"
-def check_nutcracker_status(redis_server):
-    nutcracker_status=redis_server.exec_command(redis_nutcracker_check)[1].read()
+            log("[INFO]", "redis_sentinel Start success!")
+        else:
+            print datetime.datetime.now(), "INFO redis_sentinel_cehck status is OK!"
+    else:
+        log("[INFO]", "redis_sentinel is running")
+
+
+def check_nutcracker_status():
+    nutcracker_status = run_command(redis_nutcracker_check)
     if nutcracker_status is "":
-        print datetime.datetime.now(),"ERROR redis nutcracker is not running,auto start nutcracker"
-        redis_server.exec_command(redis_nutcracker_start)
+        print datetime.datetime.now(), "ERROR redis nutcracker is not running,auto start nutcracker"
+        run_command(_redis_nutcracker_start)
         if nutcracker_status is not "":
-            print datetime.datetime.now(),"redis nutcracker start succsess"
+            print time.ctime(), "redis nutcracker start succsess"
 
-def get_sentinel_info(sentinel_info):
-    master_name=re.findall("name=\w+",sentinel_info)
-    redis_master_name=None
-    for x in master_name:
-        redis_master_name= str.replace(x,"name=","")
-    if redis_master_name is None:
-        return None
-    master_ip=re.findall("address=[\w\.:]+",sentinel_info)
-    redis_master_ip=None
-    for x in master_ip:
-        redis_master_ip= str.replace(x,"address=","")
-    if redis_master_ip is None:
-        return None
-    redis_master=redis_master_ip+" "+redis_master_name
-    return {"redis_master":redis_master,"redis_master_ip":redis_master_ip,"redis_master_name":redis_master_name}
 
-def check_nutcracker(ssh,redis_master):
-    check_nutcracker_status(redis_server)
-    redis_sftp=ssh.open_sftp()
-    file=redis_sftp.open(nutcracker_file).read()
-    #匹配10.237.81.102:7000:1 master
-    config=re.findall("\d+\.\d+\.\d+\.\d+:\d+"+":\d+\s+"+redis_master["redis_master_name"]+"\s*\"",file)
-    if config is []:
-        return None
-    config_array= re.split("[:|\s]",config[0])
-    if len(config_array) <4:
-        return None
-    #print nutcracker_file+":"+config[0]
-    config_redis={"config_redis":config_array[0]+":"+config_array[1],"config_right":config_array[2],"config_name":config_array[3]}
-    #干掉空格和双引号与权重进行比较是否相同
-    if (config_redis["config_redis"]+config_redis["config_name"].replace("\"","")).replace(" ","") == redis_master["redis_master"].replace(" ",""):
-        return "success"
-    #备份文件
-    f=open(sys.path[0]+"/nutcracker_file","w")
-    f.write(str(file))
-    f.close()
-    redis_sftp.put(sys.path[0]+"/nutcracker_file",nutcracker_file+"_"+time.strftime("%Y%m%d-%H%M%S"))
-    #替换新文件
-    f=open(sys.path[0]+"/nutcracker_file","w")
-    f.write(str(file).replace(config[0],redis_master["redis_master_ip"]+":"+config_redis["config_right"]+" "+redis_master["redis_master_name"]+"\""))
-    f.close()
-    redis_sftp.put(sys.path[0]+"/nutcracker_file",nutcracker_file)
-    return "wait_for_restart"
+def log(loglevel, loginfo):
+    time_info = time.ctime()
+    print time_info, loglevel, loginfo
 
-def redis_master():
-    sentinel_info=redis_server.exec_command(redis_sentinel_info)[1].read()
-    return get_sentinel_info(sentinel_info)
 
-log("INFO","Start to monit redis status !")
-#检查Redis、Sentinel、nutcracker
-log("INFO","check redis_sentinel !!!")
-check_redis_sentinel(redis_server)
-print "The redis master ip is",redis_master()["redis_master_ip"]
-while(True):
+class __tw_monit:
+    _redis_master_names = None
+    _redis_master_info = None
+
+    def __init__(self, redis_master_name):
+        self._redis_master_names = redis_master_name
+        self._redis_master_info = self.redis_master()
+
+    def get_sentinel_info(self, sentinel_info):
+        if self._redis_master_names is not None:
+            for master_name in self._redis_master_names:
+                master_name_line = re.findall("name=" + master_name + ",", sentinel_info)
+                redis_master_name = None
+                if master_name_line is not None:
+                    for x in master_name_line:
+                        redis_master_name = str.replace(x, "name=", "").replace(",", "")
+                    if redis_master_name is None:
+                        continue
+                    master_ip = re.findall("address=[\w\.:]+", sentinel_info)
+                    redis_master_ip = None
+                    if master_ip is not None:
+                        for x in master_ip:
+                            redis_master_ip = str.replace(x, "address=", "")
+                        if redis_master_ip is None:
+                            continue
+                        redis_master = redis_master_ip + " " + redis_master_name
+                        return {"redis_master": redis_master, "redis_master_ip": redis_master_ip,
+                                "redis_master_name": redis_master_name}
+            return None
+
+    def getfile(self, filename, mode="r+"):
+        if _redis_server is None:
+            file = open(filename, "r+")
+        else:
+            redis_sftp = _redis_server.open_sftp()
+            file = redis_sftp.open(filename, "r+")
+        return file
+
+    def check_nutcracker(self):
+        check_nutcracker_status()
+        f = self.getfile(_nutcracker_file)
+        file = f.read()
+        if self._redis_master_info is not None:
+            tmp_file = file
+            for redis_master in self._redis_master_info:
+                if redis_master is None: continue;
+                config = re.findall("\d+\.\d+\.\d+\.\d+:\d+\:\d+\s*" + redis_master["redis_master_name"] + "\s*\"",file)
+                if config is []:
+                    continue
+                config_array = re.split(':|\s*', config[0])
+                if len(config_array) < 4:
+                    continue
+                config_re = {"config_redis": config_array[0] + ":" + config_array[1], "config_right": config_array[2],
+                             "config_name": config_array[3]}
+                config_now = config_re['config_redis'] + config_re['config_name']
+                 # 备份文件
+                tmp_file = str(tmp_file).replace(config[0],redis_master["redis_master_ip"] + ":" + config_re["config_right"] + " " +
+                            redis_master["redis_master_name"] + "\"")
+            f.close()
+            if tmp_file != file:
+                print("exec "+"cp "+_nutcracker_file+"{,."+time.strftime("%Y%m%d-%H%M%S")+"}")
+                run_command("cp "+_nutcracker_file+"{,."+time.strftime("%Y%m%d-%H%M%S")+"}")
+                # 替换新文件
+                f = self.getfile(_nutcracker_file, "w+")
+                f.write(tmp_file)
+                f.close()
+                return 1
+            return 0
+
+    def redis_master(self):
+        sentinel_info = run_command(_redis_sentinel_info)
+        sentinel_info_list = re.findall(
+            "master\d+:name=\w+,status=\w+,address=\d+\.\d+\.\d+\.\d+:\d+,slaves=\d+.sentinels=\d+", sentinel_info)
+        redis_list = []
+        if (sentinel_info_list is not None):
+            for s in sentinel_info_list:
+                redis_list.append(self.get_sentinel_info(s))
+        return redis_list
+
+    def print_master_ip(self):
+        if self._redis_master_info is not None:
+            for _redis_info in self._redis_master_info:
+                if _redis_info is None: continue
+                print time.ctime(), "[INFO] The redis master ip is---->", _redis_info["redis_master_ip"]
+
+print "---" * 20
+log("[INFO]", "Start to monit redis status !")
+# 检查Redis、Sentinel、nutcracker
+log("[INFO]", "check redis_sentinel !!!")
+check_redis_sentinel()
+
+while (True):
+    _redis = __tw_monit(_redis_master_name)
+    _redis.print_master_ip()
     time.sleep(check_time)              #程序休息10秒
-    check_redis_sentinel(redis_server)
-    #检查redis_sentinel 以及TwemProxy 
-    file_info=None
+    check_redis_sentinel()
+    # 检查redis_sentinel 以及TwemProxy
+    file_info = 5
     try:
-        file_info=check_nutcracker(redis_server,redis_master())
+        file_info = _redis.check_nutcracker()
     except:
-        file_info=None
-    #判断是否需要重启nutcracker
-    if file_info is None:
-        print "ERROR Can't get nutcracker infomation;",check_nutcracker(redis_server,redis_master())
+        file_info = 5
+    # 判断是否需要重启nutcracker
+    if (file_info == 5):
+        print time.ctime(), "[ERROR] Can't get nutcracker information;", _redis.check_nutcracker()
         break
-    if file_info == "success":
+    if (file_info == 0):
         continue
-    if file_info =="wait_for_restart":
-        log("INFO","restart nutcracker")
-        redis_server.exec_command(redis_nutcracker_end)
-        time.sleep(2)
-        redis_server.exec_command(redis_nutcracker_start)
-        log("INFO","restart nutcracker over！")
-        print "The redis master ip is",redis_master()["redis_master_ip"]
+    else:
+        log("[INFO]", "restart nutcracker")
+        run_command(_redis_nutcracker_end)
+        time.sleep(1)
+        run_command(_redis_nutcracker_start)
+        log("INFO", "restart nutcracker over！")
+        _redis.print_master_ip()
