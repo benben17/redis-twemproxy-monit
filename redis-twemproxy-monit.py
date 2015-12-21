@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # coding=utf-8
-__author__ = 'lixiaozhu'
+
 
 import time
 import re
@@ -22,6 +22,7 @@ _redis_nutcracker_end = "cat /var/log/nutcracker.pid |xargs kill -9 && rm -rf /v
 _redis_sentinel_info = "redis-cli -p 26379 info Sentinel|grep status"
 _redis_name_command="redis-cli -p 26379 info Sentinel |awk -F\",\" \'/address/ {print $1}\'|awk -F\":name=\" '{printf(\"%s,\",$2)}'"
 
+
 # 检查配置时间，单位秒
 check_time = 5
 
@@ -34,8 +35,8 @@ redis_nutcracker_check = "netstat -antp|awk  '/22121/ &&  /LISTEN/'"
 
 host=None
 # host = {}
-# host["ip"] = "10.xx.xx.xx"
-# host["name"] = "xxxxx"
+# host["ip"] = "10.237.xx.xx"
+# host["name"] = "root"
 # host["password"] = "xxxxxxx"
 # host["port"] = 22
 
@@ -75,7 +76,7 @@ def check_redis_sentinel():
         print redis_sentinel_status
         log("[ERROR]", "redis_sentinel is not running,start redis_sentinel")
         redis_sentinel_status = run_command(_redis_sentinel_start)
-    print redis_sentinel_status
+        print redis_sentinel_status
         if redis_sentinel_status is not '':
             log("[INFO]", "redis_sentinel Start success!")
         else:
@@ -159,6 +160,7 @@ class __tw_monit:
                 config_now = config_re['config_redis'] + config_re['config_name']
                  # 备份文件
                 tmp_file = str(tmp_file).replace(config[0],redis_master["redis_master_ip"] + ":" + config_re["config_right"] + " " +
+
                             redis_master["redis_master_name"] + "\"")
             f.close()
             if tmp_file != file:
