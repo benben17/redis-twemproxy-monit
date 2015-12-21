@@ -16,6 +16,7 @@ Slave1  SlaveN      Slave 1 Slave N
 脚本运行：
 nohup redis-twemproxy-monit.py &
 
+
 配置文件路径
 TwemProxy  /etc/nutcracker/nutcracker.yml
 
@@ -25,8 +26,13 @@ host["ip"] = "10.10.10.1"
 host["name"] = "******"
 host["password"] = "******"
 host["port"] = 22
+
 2、监控远程redis_Sentinel
 配置对应的服务器信息即可
+host["ip"] = "10.10.10.1"
+host["name"] = "******"
+host["password"] = "******"
+host["port"] = 22
 
 脚本运行：
 nohup redis-twemproxy-monit.py &
